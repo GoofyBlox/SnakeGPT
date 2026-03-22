@@ -81,10 +81,12 @@ function emptyHTML() {
   return '<div id="empty">' +
     '<div class="empty-icon">🐍</div>' +
     '<div class="empty-title">Snake<em>GPT</em> AI</div>' +
-    '<div class="empty-sub">Elite AI code assistant. Write, debug, explain — upload files and preview HTML live.</div>' +
+    '<div class="empty-sub">Professional coding assistant and OSINT intelligence center. Write, debug, explain — and preview HTML/CSS/JS live.</div>' +
     '<div class="sugs">' +
     '<button class="sug" onclick="suggest(this)"><b>Generate</b>Write a Python web scraper</button>' +
+    '<button class="sug" onclick="suggest(this)"><b>Analyze</b>Network reconnaissance</button>' +
     '<button class="sug" onclick="suggest(this)"><b>Explain</b>How does async/await work?</button>' +
+    '<button class="sug" onclick="suggest(this)"><b>Intelligence</b>Gather OSINT data</button>' +
     '<button class="sug" onclick="suggest(this)"><b>Preview</b>Make a cool CSS animation</button>' +
     '<button class="sug" onclick="suggest(this)"><b>Debug</b>Fix the errors in my code</button>' +
     '</div></div>';
