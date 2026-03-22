@@ -116,18 +116,47 @@ body {
 #history-list::-webkit-scrollbar-thumb { background: var(--muted2); border-radius: 2px; }
 
 .h-item {
-  padding: 8px 10px;
+  padding: 7px 8px;
   border-radius: 7px;
   font-size: 12px; color: var(--text2);
   cursor: pointer;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   transition: background 0.12s, color 0.12s;
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 7px;
+  position: relative;
+  animation: slideIn 0.18s ease;
 }
-.h-item svg { width: 13px; height: 13px; flex-shrink: 0; opacity: 0.4; }
+@keyframes slideIn { from{opacity:0;transform:translateX(-8px)} to{opacity:1;transform:translateX(0)} }
+.h-item-icon { width: 13px; height: 13px; flex-shrink: 0; opacity: 0.35; }
+.h-item-label {
+  flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: 12px;
+}
+.h-item-label input {
+  width: 100%; background: none; border: none; outline: none;
+  color: var(--text); font-family: 'Inter', sans-serif;
+  font-size: 12px; padding: 0;
+}
+.h-item-actions {
+  display: none; align-items: center; gap: 2px; flex-shrink: 0;
+}
+.h-item:hover .h-item-actions { display: flex; }
+.h-item.active .h-item-actions { display: flex; }
+.h-act {
+  width: 22px; height: 22px;
+  background: none; border: none;
+  border-radius: 5px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0.5; transition: opacity 0.12s, background 0.12s;
+}
+.h-act:hover { opacity: 1; background: var(--surface3); }
+.h-act.del:hover { color: var(--red); }
+.h-act svg { width: 12px; height: 12px; }
 .h-item:hover { background: var(--surface); color: var(--text); }
+.h-item:hover .h-item-icon { opacity: 0.6; }
 .h-item.active { background: var(--green-dim); color: var(--green); }
-.h-item.active svg { opacity: 0.8; }
+.h-item.active .h-item-icon { opacity: 0.8; }
+.h-item.deleting { animation: fadeOut 0.2s ease forwards; }
+@keyframes fadeOut { to{opacity:0;transform:translateX(-10px);max-height:0;padding:0;margin:0} }
 
 .sb-foot {
   padding: 12px;
@@ -597,34 +626,59 @@ body {
     return cls ? cls.replace('language-', '') : '';
   }
 
-  // detect if code is previewable (html/css/js)
-  function isPreviewable(lang, code) {
+  // only HTML triggers preview button
+  function isPreviewable(lang) {
     const l = lang.toLowerCase();
-    if (['html', 'htm'].includes(l)) return true;
-    if (['css', 'javascript', 'js'].includes(l)) return true;
-    // also detect even if lang not set but has html tags
-    if (!l && /<html|<body|<div|<style|<script/i.test(code)) return true;
-    return false;
+    return ['html', 'htm'].includes(l);
   }
 
-  function buildPreviewHtml(lang, code) {
-    const l = lang.toLowerCase();
-    if (['html','htm',''].includes(l) || !l) return code;
-    if (l === 'css') return `<style>${code}</style><div style="padding:20px;font-family:sans-serif;">CSS Preview</div>`;
-    if (['js','javascript'].includes(l)) return `<script>${code}<\/script>`;
-    return code;
+  // collect ALL css + js blocks from the same AI message bubble
+  function buildFullPreview(htmlCode, bubble) {
+    // extract css blocks
+    const cssBlocks = [];
+    const jsBlocks = [];
+    bubble.querySelectorAll('pre code').forEach(block => {
+      const lang = getLang(block).toLowerCase();
+      const src = block.textContent;
+      if (lang === 'css') cssBlocks.push(src);
+      if (lang === 'js' || lang === 'javascript') jsBlocks.push(src);
+    });
+
+    let base = htmlCode;
+
+    // inject collected CSS before </head> or at top
+    if (cssBlocks.length) {
+      const styleTag = '<style>\n' + cssBlocks.join('\n') + '\n</style>';
+      if (base.includes('</head>')) {
+        base = base.replace('</head>', styleTag + '\n</head>');
+      } else {
+        base = styleTag + '\n' + base;
+      }
+    }
+
+    // inject collected JS before </body> or at bottom
+    if (jsBlocks.length) {
+      const scriptTag = '<script>\n' + jsBlocks.join('\n') + '\n<\/script>';
+      if (base.includes('</body>')) {
+        base = base.replace('</body>', scriptTag + '\n</body>');
+      } else {
+        base = base + '\n' + scriptTag;
+      }
+    }
+
+    return base;
   }
 
-  function openPreview(code, lang) {
-    lastPreviewCode = code;
+  function openPreview(htmlCode, bubble) {
+    lastPreviewCode = buildFullPreview(htmlCode, bubble);
     previewPane.classList.add('open');
-    const html = buildPreviewHtml(lang, code);
-    previewFrame.srcdoc = html;
+    previewFrame.srcdoc = lastPreviewCode;
   }
 
   function refreshPreview() {
+    const tmp = lastPreviewCode;
     previewFrame.srcdoc = '';
-    setTimeout(() => { previewFrame.srcdoc = buildPreviewHtml('html', lastPreviewCode); }, 50);
+    setTimeout(() => { previewFrame.srcdoc = tmp; }, 50);
   }
 
   function closePreview() {
@@ -677,11 +731,11 @@ body {
         actions.appendChild(copyBtn);
 
         // preview btn — only for html/css/js
-        if (isPreviewable(lang, code)) {
+        if (isPreviewable(lang)) {
           const prevBtn = document.createElement('button');
           prevBtn.className = 'code-btn preview-trigger';
           prevBtn.textContent = '▶ Preview';
-          prevBtn.onclick = () => openPreview(code, lang);
+          prevBtn.onclick = () => openPreview(code, bubble.closest('.bubble') || bubble);
           actions.appendChild(prevBtn);
         }
 
@@ -725,16 +779,76 @@ body {
   function renderHistory() {
     const list = document.getElementById('history-list');
     list.innerHTML = '';
-    sessions.forEach(s => {
+    sessions.forEach((s, idx) => {
       const item = document.createElement('div');
       item.className = 'h-item' + (s.title === currentTitle ? ' active' : '');
-      item.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>${s.title}`;
-      item.onclick = () => {
+
+      item.innerHTML = `
+        <svg class="h-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <div class="h-item-label"><span class="h-title">${s.title}</span></div>
+        <div class="h-item-actions">
+          <button class="h-act ren" title="Rename">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="h-act del" title="Delete">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+          </button>
+        </div>`;
+
+      // load session on click (not on action buttons)
+      item.addEventListener('click', (e) => {
+        if (e.target.closest('.h-act')) return;
         history = s.history; currentTitle = s.title;
         chatInner.innerHTML = '';
         history.forEach(m => addMsg(m.role === 'assistant' ? 'ai' : 'user', m.content));
         renderHistory(); closeSidebar();
-      };
+      });
+
+      // rename
+      item.querySelector('.ren').addEventListener('click', (e) => {
+        e.stopPropagation();
+        const labelEl = item.querySelector('.h-title');
+        const oldTitle = s.title;
+        const input = document.createElement('input');
+        input.value = oldTitle;
+        input.onclick = e2 => e2.stopPropagation();
+        input.onblur = input.onkeydown = (ev) => {
+          if (ev.type === 'keydown' && ev.key !== 'Enter') return;
+          const newTitle = input.value.trim() || oldTitle;
+          sessions[idx].title = newTitle;
+          if (currentTitle === oldTitle) currentTitle = newTitle;
+          try { localStorage.setItem('sgpt_sessions', JSON.stringify(sessions)); } catch(_) {}
+          renderHistory();
+        };
+        labelEl.replaceWith(input);
+        input.focus(); input.select();
+      });
+
+      // delete
+      item.querySelector('.del').addEventListener('click', (e) => {
+        e.stopPropagation();
+        item.classList.add('deleting');
+        setTimeout(() => {
+          if (currentTitle === s.title) {
+            currentTitle = null; history = [];
+            chatInner.innerHTML = \`<div id="empty">
+              <div class="empty-icon">🐍</div>
+              <div class="empty-title">Snake<em>GPT</em> AI</div>
+              <div class="empty-sub">Elite AI code assistant. Write, debug, explain — and preview HTML/CSS/JS live.</div>
+              <div class="sugs">
+                <button class="sug" onclick="suggest(this)"><b>Generate</b>Write a Python web scraper</button>
+                <button class="sug" onclick="suggest(this)"><b>Explain</b>How does async/await work?</button>
+                <button class="sug" onclick="suggest(this)"><b>Preview</b>Make a cool CSS animation</button>
+                <button class="sug" onclick="suggest(this)"><b>Debug</b>Fix the errors in my code</button>
+              </div></div>\`;
+            closePreview();
+          }
+          sessions.splice(idx, 1);
+          try { localStorage.setItem('sgpt_sessions', JSON.stringify(sessions)); } catch(_) {}
+          renderHistory();
+        }, 200);
+      });
+
       list.appendChild(item);
     });
   }
