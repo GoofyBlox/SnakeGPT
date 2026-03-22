@@ -44,7 +44,7 @@
     <button class="tb-icon" onclick="toggleSidebar()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
     </button>
-    <div class="tb-logo">Snake<em>GPT</em> AI</div>
+    <div class="tb-logo">Snake<span style="font-style: italic; color: #4CAF50;">GPT</span> AI</div>
     <button class="tb-new" onclick="newChat()">+</button>
   </div>
 
@@ -56,11 +56,13 @@
         <div class="chat-inner" id="chat-inner">
           <div id="empty">
             <div class="empty-icon">🐍</div>
-            <div class="empty-title">Snake<em>GPT</em> AI</div>
-            <div class="empty-sub">Elite AI code assistant. Write, debug, explain — and preview HTML/CSS/JS live.</div>
+            <div class="empty-title">Snake<span style="font-style: italic;">GPT</span> AI</div>
+            <div class="empty-sub">Professional coding assistant and OSINT intelligence center. Write, debug, explain — and preview HTML/CSS/JS live.</div>
             <div class="sugs">
               <button class="sug" onclick="suggest(this)"><b>Generate</b>Write a Python web scraper</button>
+              <button class="sug" onclick="suggest(this)"><b>Analyze</b>Network reconnaissance</button>
               <button class="sug" onclick="suggest(this)"><b>Explain</b>How does async/await work?</button>
+              <button class="sug" onclick="suggest(this)"><b>Intelligence</b>Gather OSINT data</button>
               <button class="sug" onclick="suggest(this)"><b>Preview</b>Make a cool CSS animation</button>
               <button class="sug" onclick="suggest(this)"><b>Debug</b>Fix the errors in my code</button>
             </div>
