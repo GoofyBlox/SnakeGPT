@@ -12,36 +12,54 @@ app = Flask(__name__)
 # All OpenRouter free models — truly free, no credit card needed
 # Get keys at: openrouter.ai → Keys
 # Create multiple accounts to get more keys — each key is unique
+# ── IMPORTANT ──
+# OpenRouter: rate limit is per MODEL, not per key
+# So 1 key can try many models — if one model is rate limited, next model is tried
+# Groq: truly free, no credits needed, just sign up at groq.com
+# Set these in Render environment variables:
+#   OPENROUTER_API_KEY  → openrouter.ai → Keys
+#   GROQ_API_KEY_1      → console.groq.com → API Keys (account 1)
+#   GROQ_API_KEY_2      → console.groq.com → API Keys (account 2)
+#   GROQ_API_KEY_3      → console.groq.com → API Keys (account 3)
 PROVIDERS = [
+    # ── GROQ (free, no credits needed) ──
+    {
+        "name": "LLaMA 3.3 70B",
+        "provider": "groq",
+        "model": "llama-3.3-70b-versatile",
+        "key_env": "GROQ_API_KEY_1",
+    },
+    {
+        "name": "LLaMA 4 Scout",
+        "provider": "groq",
+        "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+        "key_env": "GROQ_API_KEY_2",
+    },
+    {
+        "name": "Qwen3 32B",
+        "provider": "groq",
+        "model": "qwen/qwen3-32b",
+        "key_env": "GROQ_API_KEY_3",
+    },
+
+    # ── OPENROUTER (1 key, fallback models) ──
     {
         "name": "DeepSeek V3",
         "provider": "openrouter",
         "model": "deepseek/deepseek-chat-v3-0324:free",
-        "key_env": "OPENROUTER_API_KEY_1",
+        "key_env": "OPENROUTER_API_KEY",
     },
     {
         "name": "DeepSeek R1",
         "provider": "openrouter",
         "model": "deepseek/deepseek-r1:free",
-        "key_env": "OPENROUTER_API_KEY_2",
+        "key_env": "OPENROUTER_API_KEY",
     },
     {
         "name": "LLaMA 4 Maverick",
         "provider": "openrouter",
         "model": "meta-llama/llama-4-maverick:free",
-        "key_env": "OPENROUTER_API_KEY_3",
-    },
-    {
-        "name": "Qwen3 235B",
-        "provider": "openrouter",
-        "model": "qwen/qwen3-235b-a22b:free",
-        "key_env": "OPENROUTER_API_KEY_4",
-    },
-    {
-        "name": "Mistral Small 3.1 24B",
-        "provider": "openrouter",
-        "model": "mistralai/mistral-small-3.1-24b-instruct:free",
-        "key_env": "OPENROUTER_API_KEY_5",
+        "key_env": "OPENROUTER_API_KEY",
     },
 ]
 
@@ -168,6 +186,26 @@ def read_file_content(file_bytes, filename):
             return f'[Could not decode: {filename}]', None
 
 
+def call_groq(model, messages, api_key):
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": model,
+        "messages": [{"role": "system", "content": SYSTEM_PROMPT}] + messages,
+        "max_tokens": 4096,
+        "temperature": 0.6,
+    }
+    r = http_requests.post(url, headers=headers, json=payload, timeout=30)
+    r.raise_for_status()
+    data = r.json()
+    if "error" in data:
+        raise Exception(data["error"].get("message", "Groq error"))
+    return data["choices"][0]["message"]["content"]
+
+
 def call_openrouter(model, messages, api_key):
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
@@ -199,7 +237,10 @@ def try_providers(messages):
             continue
 
         try:
-            reply = call_openrouter(p["model"], messages, api_key)
+            if p["provider"] == "groq":
+                reply = call_groq(p["model"], messages, api_key)
+            else:
+                reply = call_openrouter(p["model"], messages, api_key)
             return reply, p["name"], None
 
         except Exception as e:
