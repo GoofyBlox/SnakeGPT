@@ -42,18 +42,18 @@ PROVIDERS = [
 
     # ── OPENROUTER (free model) ──
     {
-        "name": "Qwen3 Coder 480B",
+        "name": "DeepSeek V3",
         "provider": "openrouter",
-        "model": "qwen/qwen3-coder-480b-a35b-instruct:free",
+        "model": "deepseek/deepseek-chat-v3-0324:free",
         "key_env": "OPENROUTER_API_KEY",
     },
 
-    # ── GEMINI 2.5 Pro (Google AI Studio) ──
+    # ── TOGETHER AI extra ──
     {
-        "name": "Gemini 2.5 Pro",
-        "provider": "gemini",
-        "model": "gemini-2.5-pro-preview-03-25",
-        "key_env": "GEMINI_API_KEY",
+        "name": "LLaMA 3.1 405B",
+        "provider": "together",
+        "model": "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo",
+        "key_env": "TOGETHER_API_KEY_5",
     },
 ]
 
@@ -224,25 +224,6 @@ def call_openrouter(model, messages, api_key):
     return data["choices"][0]["message"]["content"]
 
 
-def call_gemini(model, messages, api_key):
-    contents = []
-    for m in messages:
-        role = "user" if m["role"] == "user" else "model"
-        content = m["content"] if isinstance(m["content"], str) else str(m["content"])
-        contents.append({"role": role, "parts": [{"text": content}]})
-
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
-    payload = {
-        "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
-        "contents": contents,
-        "generationConfig": {"maxOutputTokens": 4096, "temperature": 0.6}
-    }
-    r = http_requests.post(url, json=payload, timeout=60)
-    if r.status_code == 404:
-        raise Exception(f"model_not_found: {model}")
-    r.raise_for_status()
-    data = r.json()
-    return data["candidates"][0]["content"]["parts"][0]["text"]
 
 
 def try_providers(messages):
@@ -258,8 +239,6 @@ def try_providers(messages):
                 reply = call_together(p["model"], messages, api_key)
             elif p["provider"] == "openrouter":
                 reply = call_openrouter(p["model"], messages, api_key)
-            elif p["provider"] == "gemini":
-                reply = call_gemini(p["model"], messages, api_key)
             else:
                 continue
 
