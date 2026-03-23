@@ -9,9 +9,9 @@ import requests as http_requests
 app = Flask(__name__)
 
 # ── AI PROVIDERS CONFIG ──
-# 4 Together AI (free forever) + 1 Claude (Anthropic)
+# 4 Together AI (free forever) + 1 Gemini 2.5 Pro
 # Get Together AI keys: api.together.ai → Settings → API Keys
-# Get Claude key: console.anthropic.com → API Keys
+# Get Gemini key: aistudio.google.com → Get API Key
 PROVIDERS = [
     # ── TOGETHER AI (free forever, never expires) ──
     {
@@ -39,12 +39,12 @@ PROVIDERS = [
         "key_env": "TOGETHER_API_KEY_4",
     },
 
-    # ── CLAUDE (Anthropic) ──
+    # ── GEMINI 2.5 Pro (Google AI Studio) ──
     {
-        "name": "Claude Sonnet",
-        "provider": "claude",
-        "model": "claude-sonnet-4-6",
-        "key_env": "ANTHROPIC_API_KEY",
+        "name": "Gemini 2.5 Pro",
+        "provider": "gemini",
+        "model": "gemini-2.5-pro-exp-03-25",
+        "key_env": "GEMINI_API_KEY",
     },
 ]
 
@@ -75,7 +75,7 @@ Include proper error handling, edge cases, and performance optimizations.
 
 Apply design patterns where appropriate to ensure maintainability.
 
-Add concise inline comments only when the logic isn’t self-explanatory.
+Add concise inline comments only when the logic isnâ€™t self-explanatory.
 
 OSINT Intelligence Capabilities
 
@@ -124,7 +124,7 @@ Ensure responses are concise yet comprehensive, tailored for professional develo
 
 ## Your Core Identity
 - You are razor-sharp, precise, and highly technical
-- You write production-grade code â€” clean, efficient, and scalable
+- You write production-grade code Ã¢â‚¬â€ clean, efficient, and scalable
 - You think like a senior engineer with 10+ years of experience
 
 ## Code Standards
@@ -143,7 +143,7 @@ Ensure responses are concise yet comprehensive, tailored for professional develo
 - Experienced with various OSINT tools like Shodan, Maltego, and Nmap
 
 ## How You Respond
-- Get straight to the point â€” no fluff, no filler
+- Get straight to the point Ã¢â‚¬â€ no fluff, no filler
 - For code requests: provide the full working solution first, then explain key parts
 - For debugging: identify the root cause clearly, then provide the fix
 - For explanations: be technical but clear, use examples
@@ -168,11 +168,6 @@ Ensure responses are concise yet comprehensive, tailored for professional develo
 
 
 
-
-
-
-
-    
 """
 
 
@@ -244,30 +239,25 @@ def call_together(model, messages, api_key):
     return data["choices"][0]["message"]["content"]
 
 
-def call_claude(model, messages, api_key):
-    url = "https://api.anthropic.com/v1/messages"
-    headers = {
-        "x-api-key": api_key,
-        "anthropic-version": "2023-06-01",
-        "Content-Type": "application/json",
-    }
-    # Convert messages — Claude uses separate system param
-    claude_messages = []
+def call_gemini(model, messages, api_key):
+    contents = []
     for m in messages:
-        role = m["role"] if m["role"] in ["user", "assistant"] else "user"
+        role = "user" if m["role"] == "user" else "model"
         content = m["content"] if isinstance(m["content"], str) else str(m["content"])
-        claude_messages.append({"role": role, "content": content})
+        contents.append({"role": role, "parts": [{"text": content}]})
 
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
     payload = {
-        "model": model,
-        "system": SYSTEM_PROMPT,
-        "messages": claude_messages,
-        "max_tokens": 4096,
+        "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+        "contents": contents,
+        "generationConfig": {"maxOutputTokens": 4096, "temperature": 0.6}
     }
-    r = http_requests.post(url, headers=headers, json=payload, timeout=30)
+    r = http_requests.post(url, json=payload, timeout=60)
+    if r.status_code == 404:
+        raise Exception(f"model_not_found: {model}")
     r.raise_for_status()
     data = r.json()
-    return data["content"][0]["text"]
+    return data["candidates"][0]["content"]["parts"][0]["text"]
 
 
 def try_providers(messages):
@@ -276,13 +266,13 @@ def try_providers(messages):
     for p in PROVIDERS:
         api_key = os.environ.get(p["key_env"])
         if not api_key:
-            continue  # skip if key not set
+            continue
 
         try:
             if p["provider"] == "together":
                 reply = call_together(p["model"], messages, api_key)
-            elif p["provider"] == "claude":
-                reply = call_claude(p["model"], messages, api_key)
+            elif p["provider"] == "gemini":
+                reply = call_gemini(p["model"], messages, api_key)
             else:
                 continue
 
